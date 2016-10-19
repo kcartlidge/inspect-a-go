@@ -8,10 +8,10 @@ import (
 )
 
 // PropertyList ... All known public properties on a thing.
-type PropertyList map[string]PropertyType
+type PropertyList map[string]propertyType
 
-// PropertyType ... A single (public) property on a thing.
-type PropertyType struct {
+// propertyType ... A single (public) property on a thing.
+type propertyType struct {
 	Name  string
 	Type  string
 	Value string
@@ -26,38 +26,56 @@ func (p PropertyList) GetNames() []string {
 	for _, k := range p {
 		keys = append(keys, k.Name)
 	}
+
+	// Without this, the ordering is (intentionally) pseudorandom and inconsistent.
 	sort.Strings(keys)
 	return keys
 }
 
-// GetNamesAsCSV ... Returns all the property names (sorted) as a CSV list.
+// GetNamesAsCSV ... Returns property names (sorted) as a CSV list.
 func (p PropertyList) GetNamesAsCSV() string {
 	return strings.Join(p.GetNames(), ",")
 }
 
+// GetNamesAsSQL ... Returns property names (sorted) as a CSV list, spaced for clarity.
+func (p PropertyList) GetNamesAsSQL() string {
+	return strings.Join(p.GetNames(), ", ")
+}
+
 // Inspect ... Discover the properties for the given thing, with a from-cache flag.
-func Inspect(name string, thing interface{}) (PropertyList, bool) {
+func Inspect(thing interface{}) (PropertyList, bool) {
 
 	if thing == nil {
 		return PropertyList{}, false
 	}
 
+	// Only structs are supported.
 	if reflect.TypeOf(thing).Kind().String() == "struct" {
 		properties := PropertyList{}
-		cached := false
 		thingValue := reflect.ValueOf(thing)
 		typeOfT := thingValue.Type()
+		pkgPath := typeOfT.PkgPath()
 
-		result, ok := memcache.Fetch("i__" + name)
-		if ok {
-			cached = true
-			cachedProperties := result.(PropertyList)
+		// Derive a cache key from the name of a non-anonymous
+		// structure and try the cache.
+		cacheKey := ""
+		cachedValue := *new(interface{})
+		cached := false
+		if pkgPath != "" {
+			cacheKey = typeOfT.Name()
+			cachedValue, cached = memcache.Fetch("i__" + cacheKey)
+		}
+
+		if cached {
+			// Reuse the property definitions but fetch current values.
+			cachedProperties := cachedValue.(PropertyList)
 			for _, p := range cachedProperties {
 				field := thingValue.FieldByName(p.Name)
 				p.Value = fmt.Sprintf("%v", field.Interface())
 				properties[p.Name] = p
 			}
 		} else {
+			// Derive all from scratch then cache.
 			cached = false
 			for i := 0; i < thingValue.NumField(); i++ {
 				field := thingValue.Field(i)
@@ -66,15 +84,17 @@ func Inspect(name string, thing interface{}) (PropertyList, bool) {
 				if isPublic {
 					fieldType := fmt.Sprintf("%s", field.Type())
 					value := fmt.Sprintf("%v", field.Interface())
-					propertyType := PropertyType{name, fieldType, value}
-					properties[name] = propertyType
+					propType := propertyType{name, fieldType, value}
+					properties[name] = propType
 				}
 			}
+			if cacheKey != "" {
+				memcache.Set("i__"+cacheKey, properties)
+			}
 		}
-
-		memcache.Set("i__"+name, properties)
 		return properties, cached
 	}
 
+	// Default for non-structs.
 	return PropertyList{}, false
 }
