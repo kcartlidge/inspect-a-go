@@ -122,3 +122,19 @@ func Test_Inspect_OnSubsequentRequest_ReturnsFromCache(t *testing.T) {
 		t.Error("Expected from cache but got afresh.")
 	}
 }
+
+func Test_Inspect_WhenFetchedFromCache_DoesNotCacheValues(t *testing.T) {
+	memcache = newMemoryCache()
+	var thing1 = struct{ A int }{1}
+	var thing2 = struct{ A int }{2}
+
+	_, _ = Inspect("simple", thing1)
+	result, fromCache := Inspect("simple", thing2)
+
+	if !fromCache {
+		t.Error("Expected from cache but got afresh.")
+	}
+	if result["A"].Value == "1" {
+		t.Error("Cached value was not updated.")
+	}
+}

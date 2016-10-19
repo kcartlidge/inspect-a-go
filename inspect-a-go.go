@@ -44,27 +44,36 @@ func Inspect(name string, thing interface{}) (PropertyList, bool) {
 
 	if reflect.TypeOf(thing).Kind().String() == "struct" {
 		properties := PropertyList{}
+		cached := false
 		thingValue := reflect.ValueOf(thing)
 		typeOfT := thingValue.Type()
 
 		result, ok := memcache.Fetch("i__" + name)
 		if ok {
-			return result.(PropertyList), true
-		}
-
-		for i := 0; i < thingValue.NumField(); i++ {
-			field := thingValue.Field(i)
-			name := fmt.Sprintf("%s", typeOfT.Field(i).Name)
-			isPublic := name[0:1] == strings.ToUpper(name[0:1])
-			if isPublic {
-				fieldType := fmt.Sprintf("%s", field.Type())
-				value := fmt.Sprintf("%v", field.Interface())
-				propertyType := PropertyType{name, fieldType, value}
-				properties[name] = propertyType
+			cached = true
+			cachedProperties := result.(PropertyList)
+			for _, p := range cachedProperties {
+				field := thingValue.FieldByName(p.Name)
+				p.Value = fmt.Sprintf("%v", field.Interface())
+				properties[p.Name] = p
+			}
+		} else {
+			cached = false
+			for i := 0; i < thingValue.NumField(); i++ {
+				field := thingValue.Field(i)
+				name := fmt.Sprintf("%s", typeOfT.Field(i).Name)
+				isPublic := name[0:1] == strings.ToUpper(name[0:1])
+				if isPublic {
+					fieldType := fmt.Sprintf("%s", field.Type())
+					value := fmt.Sprintf("%v", field.Interface())
+					propertyType := PropertyType{name, fieldType, value}
+					properties[name] = propertyType
+				}
 			}
 		}
+
 		memcache.Set("i__"+name, properties)
-		return properties, false
+		return properties, cached
 	}
 
 	return PropertyList{}, false

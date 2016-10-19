@@ -2,7 +2,7 @@
 
 *Automated inspection of a struct instance's properties and values, returning property lists, CSV or SQL.*
 
-Version: 0.1.0, Licence: MIT
+Version: 0.1.1, Licence: MIT
 
 Pass in any 'thing' whose type is a ```struct``` and it will be inspected for public properties and their values. It will also provide both *CSV* and *SQL* lists of those properties or their values, quoted where necessary.
 
@@ -28,6 +28,7 @@ Currently all public properties are located (private ones ignored) regardless of
 * Changes to visibility and return types of main ```Inspect``` function.
 * Values of the underlying type not just their string version
 * Multiple return values to include private fields too
+* Return of SQL CSV for field names and quoted field values
 * Understanding of attributes (e.g. for autogenerating form labels)
 * Possible consideration of nested structs (undecided)
 
